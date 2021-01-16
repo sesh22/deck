@@ -113,9 +113,9 @@ impl Renderer {
                     CodeBlockKind::Indented => "",
                     CodeBlockKind::Fenced(lang) => lang,
                 };
-                if let Some(syntax) = self.syntax_set.find_syntax_by_token(lang) {
-                    highlighter = Some(HighlightLines::new(syntax, &self.theme));
-                }
+                let syntax = self.syntax_set.find_syntax_by_token(lang)
+                    .unwrap_or_else(|| self.syntax_set.find_syntax_plain_text());
+                highlighter = Some(HighlightLines::new(syntax, &self.theme));
                 Event::Html(snippet.0.into())
             }
             Event::End(Tag::CodeBlock(_)) => {

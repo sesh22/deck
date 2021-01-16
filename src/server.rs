@@ -1,20 +1,24 @@
 use crate::{error::Error, html};
 use futures::{FutureExt, StreamExt};
-use inotify::{EventMask, Inotify, WatchMask};
+use notify::{watcher, Watcher, RecursiveMode, DebouncedEvent};
 use log::{debug, error, info};
 use serde::Serialize;
 use std::{
     collections::HashMap,
     net::SocketAddr,
     path::{Path, PathBuf},
+    time::Duration,
     sync::{
         atomic::{AtomicUsize, Ordering},
         Arc,
+        mpsc::channel,
+        Mutex as StdMutex,
     },
 };
 use tokio::{
     fs,
     sync::{mpsc, Mutex},
+    task::spawn_blocking
 };
 use warp::{
     reject,
@@ -36,15 +40,17 @@ async fn watch_files<P>(files: Vec<P>, users: Users) -> Result<(), Error>
 where
     P: AsRef<Path>,
 {
-    let mut inotify = Inotify::init()?;
+    let (notify_tx, notify_rx) = channel();
+    let notify_rx_arc = Arc::new(StdMutex::new(notify_rx));
+    let mut watcher = watcher(notify_tx, Duration::from_millis(16))?;
     for file in files {
-        inotify.add_watch(file, WatchMask::MODIFY)?;
+        watcher.watch(file, RecursiveMode::NonRecursive)?;
     }
-    let mut buffer = [0; 32];
-    let mut stream = inotify.event_stream(&mut buffer)?;
-    while let Some(res) = stream.next().await {
-        let event = res?;
-        if event.mask.contains(EventMask::MODIFY) {
+    loop {
+        let notify_rx = notify_rx_arc.clone();
+        // Use spawn_blocking as the notify create currently doesn't have an async interface
+        let event = spawn_blocking(move || notify_rx.lock().unwrap().recv()).await??;
+        if let DebouncedEvent::Write(_path) = event {
             let text = serde_json::to_string(&Event::Reload)?;
             for (&id, tx) in users.lock().await.iter() {
                 debug!("Reloading user, user_id={}", id);
@@ -52,7 +58,6 @@ where
             }
         }
     }
-    Ok(())
 }
 
 #[derive(Debug, Clone)]

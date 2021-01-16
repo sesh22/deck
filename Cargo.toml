@@ -21,7 +21,7 @@ minifier = "0.0.36"
 serde = { version = "1.0", features = ["derive"] }
 tokio = { version = "0.2", features = ["macros"] }
 serde_json = "1.0"
-inotify = "0.8"
+notify = "4.0"
 
 [dependencies.syntect]
 version = "4.1"

@@ -145,7 +145,7 @@ impl Renderer {
         if let Some(ref custom_css) = css {
             style.push_str(custom_css);
         }
-        let style = minifier::css::minify(&style).map_err(|s| Error::Minification(s))?;
+        let style = minifier::css::minify(&style).map_err(Error::Minification)?;
 
         // Build inline js
         let mut script = include_str!("script.js").to_owned();

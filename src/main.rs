@@ -39,6 +39,12 @@ enum Command {
         /// Add custom javascript from the given file
         #[structopt(long = "js")]
         js: Option<PathBuf>,
+        /// Output HTML file - when this is missing output HTML will be written to standard output
+        #[structopt(long = "out", short = "o", parse(from_os_str))]
+        out: Option<PathBuf>,
+        /// Markdown file containing the slides markup, if this is missing it will be read from standard input
+        #[structopt(parse(from_os_str))]
+        markdown: Option<PathBuf>,
     },
     /// Serve a local markdown files containing the slides markup
     #[structopt(name = "serve")]
@@ -90,10 +96,16 @@ async fn main() -> Result<(), Error> {
             css,
             js,
             theme_dirs,
+            out,
+            markdown,
         } => {
-            // Read input from stdin
             let mut input = String::new();
-            io::stdin().read_to_string(&mut input)?;
+            if let Some(md_path) = markdown {
+                fs::read_to_string(md_path)?;
+            } else {
+                // Read input from stdin
+                io::stdin().read_to_string(&mut input)?;
+            }
 
             let css = if let Some(path) = css {
                 let s = fs::read_to_string(path)?;
@@ -118,7 +130,11 @@ async fn main() -> Result<(), Error> {
 
             let renderer = html::Renderer::try_new(options)?;
             let html = renderer.render(input, css, js)?;
-            print!("{}", html);
+            if let Some(out_path) = out {
+                fs::write(&out_path, format!("{}", html))?;
+            } else {
+                print!("{}", html);
+            }
         }
         Command::Serve {
             port,
